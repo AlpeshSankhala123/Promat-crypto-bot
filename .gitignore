@@ -1,0 +1,38 @@
+# Environment variables (API keys - KEEP SECRET!)
+.env
+.env.*
+*.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and data
+*.log
+data/*.json
+data/*.log
+*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Deployment
+*.pid
+*.seed
+*.pid.lock
