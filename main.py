@@ -1,6 +1,9 @@
 import time
 import threading
 from datetime import datetime
+from flask import Flask
+import os
+
 from modules.binance_client import BinanceTrader
 from modules.binance_websocket import BinanceWebSocket
 from modules.nvidia_ai import NvidiaAI
@@ -8,6 +11,37 @@ from modules.indicators import calculate_indicators
 from modules.trade_manager import TradeManager
 from modules.logger import setup_logger
 from config import SYMBOL, TIMEFRAME, CHECK_INTERVAL, MIN_CONFIDENCE, PAPER_TRADING
+
+# ============================================
+# FLASK HEALTH CHECK SERVER (for Render)
+# ============================================
+
+health_app = Flask(__name__)
+
+@health_app.route('/')
+@health_app.route('/health')
+def health_check():
+    """Health check endpoint for Render to keep bot alive"""
+    return "✅ Crypto AI Trading Bot is running!", 200
+
+@health_app.route('/status')
+def status():
+    """Optional: Return bot status"""
+    return {
+        "status": "running",
+        "symbol": SYMBOL,
+        "paper_trading": PAPER_TRADING,
+        "timestamp": datetime.now().isoformat()
+    }, 200
+
+def run_health_server():
+    """Run Flask health check server on Render's PORT"""
+    port = int(os.environ.get('PORT', 8080))
+    health_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# ============================================
+# CRYPTO AI BOT MAIN CLASS
+# ============================================
 
 class CryptoAIBot:
     def __init__(self):
@@ -17,7 +51,7 @@ class CryptoAIBot:
         self.trade_manager = TradeManager()
         self.current_price = 0
         self.last_analysis_time = 0
-        self.analysis_interval = CHECK_INTERVAL  # Fallback interval
+        self.analysis_interval = CHECK_INTERVAL
         self.running = True
         
         # WebSocket callbacks
@@ -27,7 +61,7 @@ class CryptoAIBot:
             on_candle_close=self.on_candle_close,
             on_error=self.on_ws_error
         )
-        
+    
     def on_price_update(self, price_data):
         """Real-time price update from WebSocket"""
         self.current_price = price_data['price']
@@ -112,9 +146,10 @@ class CryptoAIBot:
         print("🚀 CRYPTO AI TRADING BOT - WEBSOCKET VERSION")
         print(f"📊 Trading Pair: {SYMBOL}")
         print(f"🔧 Mode: {'PAPER TRADING' if PAPER_TRADING else 'LIVE'}")
-        print(f"🌐 Network: TESTNET")
-        print("🤖 AI: NVIDIA " + ("(Mock)" if not hasattr(self.ai, 'api_key') else "Llama 3"))
+        print(f"🌐 Network: {'TESTNET' if os.getenv('BN_TESTNET', 'false').lower() == 'true' else 'MAINNET'}")
+        print("🤖 AI: NVIDIA Llama 3")
         print("🔌 Data Source: WebSocket (Real-time)")
+        print("🏥 Health Check: Running on port " + os.environ.get('PORT', '8080'))
         print("="*60)
         
         # Validate config
@@ -122,6 +157,11 @@ class CryptoAIBot:
         if not validate_config():
             print("❌ Configuration error. Please fix and restart.")
             return
+        
+        # Start health check server in background thread
+        health_thread = threading.Thread(target=run_health_server, daemon=True)
+        health_thread.start()
+        print("✅ Health check server started")
         
         # Start WebSocket
         self.ws.start()
@@ -135,6 +175,7 @@ class CryptoAIBot:
         self.analyze_and_trade()
         
         # Keep bot running
+        print("\n✅ Bot is running! Press Ctrl+C to stop.\n")
         try:
             while self.running:
                 time.sleep(1)
@@ -143,6 +184,10 @@ class CryptoAIBot:
             self.running = False
             self.ws.stop()
             print("\n✅ Bot shutdown complete")
+
+# ============================================
+# MAIN ENTRY POINT
+# ============================================
 
 if __name__ == "__main__":
     bot = CryptoAIBot()
